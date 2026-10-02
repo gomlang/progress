@@ -157,5 +157,8 @@ fn apply_update(entry: Entry, update: Update, now: i64, text_limit: isize) -> Re
             return Result::Err(invalid("position exceeds total"))
         }
     }
-    Result::Ok(Entry { dirty: true, ..result })
+    let changed = result.position != entry.position || result.total != entry.total
+        || result.message != entry.message
+        || result.status != entry.status;
+    Result::Ok(Entry { dirty: entry.dirty || changed, ..result })
 }

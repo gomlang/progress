@@ -457,7 +457,7 @@ impl Job {
             self.manager.options.max_message_bytes,
         )?;
         state.entries[index] = entry;
-        state.dirty = true;
+        state.dirty = state.dirty || entry.dirty;
         Result::Ok(())
     }
 
