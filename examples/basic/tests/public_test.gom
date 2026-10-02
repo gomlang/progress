@@ -1,6 +1,6 @@
 package tests;
 
-use consumer::progress;
+use ecosystem::progress::examples::basic as progress;
 
 #[test]
 fn independent_consumer_exercises_public_api() -> () {

@@ -62,4 +62,16 @@ From the repository root:
 (cd ../verification && GOML_BUILD_JOBS=2 just ecosystem-test progress)
 ```
 
-The test suite covers atomic and concurrent updates, frozen timing and reset, invalid-input rollback, capacity and stale handles, detached snapshots, Unicode/style rendering, deterministic throttling, plain logs, interactive redraw/resize, shared-session input ownership, cancellation before work, queued deadlines, output pressure, sticky errors, shutdown wakeups, and session reuse. The independent consumer exercises the public dependency boundary. The reference oracle checks 400 rate/ETA/spinner/bar cases using independently calculated integer/fraction arithmetic in a GoML consumer test; PTY tests use a real shared terminal session and verify restored termios/flags/cursor modes.
+The test suite covers atomic and concurrent updates, frozen timing and reset, invalid-input rollback, capacity and stale handles, detached snapshots, Unicode/style rendering, deterministic throttling, plain logs, interactive redraw/resize, shared-session input ownership, cancellation before work, queued deadlines, output pressure, sticky errors, shutdown wakeups, and session reuse. The example exercises the public API, and `goml verify` checks the downstream dependency boundary. The reference oracle checks 400 rate/ETA/spinner/bar cases using independently calculated integer/fraction arithmetic in a GoML example test; PTY tests use a real shared terminal session and verify restored termios/flags/cursor modes.
+
+## Development and examples
+
+Requires GoML 0.1.55 or newer. The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
+
+```sh
+goml run --example basic
+goml test
+goml verify --timeout 300s
+```
+
+`goml test` builds the example and runs its tests. `goml verify` repeats the example checks as an independent module against an isolated registry snapshot. `(cd ../verification && just ecosystem-test progress)` also retains the library-specific smoke and compatibility checks.
