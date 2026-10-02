@@ -1,0 +1,115 @@
+package tests;
+
+use ecosystem::progress;
+use ecosystem::terminal;
+use std::context;
+use std::io;
+use std::os::linux::ipc;
+use std::panic;
+use std::testing;
+use std::task;
+use std::utf8;
+
+#[test]
+fn clock_panics_release_operations_and_shutdown_preserves_output_and_error_priority() -> () {
+    for broken_output in Vec::from_array([false, true]) {
+        let input = testing::expect_ok(ipc::pipe(0), "input");
+        let output = testing::expect_ok(ipc::pipe(0), "output");
+        defer {
+            let _ = input.reader.close();
+            let _ = input.writer.close();
+            let _ = output.reader.close();
+            let _ = output.writer.close();
+        };
+        let session = testing::expect_ok(
+            terminal::Session::from_fds(input.reader, output.writer, terminal::Options::defaults()),
+            "session",
+        );
+        defer {
+            let _ = session.close();
+        };
+        let signal = Channel::new(1);
+        signal.send(false);
+        let manager = testing::expect_ok(
+            progress::Manager::new(
+                session,
+                progress::Options {
+                    mode: progress::Mode::Lines,
+                    clock: progress::Clock::new(
+                        || {
+                            let fail = signal.recv().unwrap_or(false);
+                            signal.send(fail);
+                            if fail {
+                                panic::raise("injected clock failure")
+                            }
+                            1000
+                        },
+                    ),
+                    ..progress::Options::defaults(),
+                },
+            ),
+            "manager",
+        );
+        let job = testing::expect_ok(manager.add("retained", Option::Some(10)), "job");
+        let _ = signal.recv();
+        signal.send(true);
+        testing::assert_eq(
+            testing::expect_err(manager.snapshot(), "clock error").kind(),
+            io::ErrorKind::Other,
+        );
+        let _ = signal.recv();
+        signal.send(false);
+        testing::assert_ok(job.advance(2));
+        testing::assert_eq(
+            testing::expect_ok(manager.snapshot(), "recovered snapshot").jobs[0].position,
+            2,
+        );
+        let expected = if broken_output {
+            testing::assert_ok(output.reader.close());
+            Option::Some(
+                testing::expect_err(manager.flush(context::Context::background()), "output failure"),
+            )
+        } else {
+            Option::None
+        };
+        let _ = signal.recv();
+        signal.send(true);
+        let error = task::scope(
+            |scope| {
+                let first = scope.spawn(|_| manager.shutdown());
+                let second = scope.spawn(|_| manager.shutdown());
+                let error = testing::expect_err(first.join(), "shutdown clock error");
+                testing::assert_eq(
+                    testing::expect_err(second.join(), "concurrent shutdown").to_string(),
+                    error.to_string(),
+                );
+                error
+            },
+        );
+        if let Some(expected) = expected {
+            testing::assert_eq(error.to_string(), expected.to_string());
+        } else {
+            testing::assert_eq(error.kind(), io::ErrorKind::Other);
+            let bytes = Vec::new();
+            for _ in 0..1024 {
+                bytes.push(0);
+            }
+            let count = testing::expect_ok(
+                output.reader.read(bytes.as_mut_slice()),
+                "final cancellation output",
+            );
+            let text = testing::expect_ok(utf8::decode_slice(bytes.slice(0, count)), "output utf8");
+            testing::assert(text.contains("x retained"));
+            testing::assert(text.contains("2/10"));
+        }
+        testing::assert_eq(
+            testing::expect_err(manager.shutdown(), "idempotent shutdown").to_string(),
+            error.to_string(),
+        );
+        testing::assert(manager.is_closed());
+        testing::assert_err(job.advance(1));
+        if !broken_output {
+            testing::assert_ok(session.write("still owned by caller"));
+        }
+    }
+}
