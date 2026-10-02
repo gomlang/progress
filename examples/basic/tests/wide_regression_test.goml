@@ -1,0 +1,45 @@
+package tests;
+
+use ecosystem::progress;
+use ecosystem::terminal;
+use std::context;
+use std::os::linux::ipc;
+use std::testing;
+
+#[test]
+fn imported_manager_suppresses_repeated_position_output() -> () {
+    let input = testing::expect_ok(ipc::pipe(0), "input");
+    let output = testing::expect_ok(ipc::pipe(0), "output");
+    defer {
+        let _ = input.reader.close();
+        let _ = input.writer.close();
+        let _ = output.reader.close();
+        let _ = output.writer.close();
+    };
+    let session = testing::expect_ok(
+        terminal::Session::from_fds(input.reader, output.writer, terminal::Options::defaults()),
+        "session",
+    );
+    defer {
+        let _ = session.close();
+    };
+    let manager = testing::expect_ok(
+        progress::Manager::new(
+            session,
+            progress::Options { mode: progress::Mode::Lines, ..progress::Options::defaults() },
+        ),
+        "manager",
+    );
+    defer {
+        let _ = manager.shutdown();
+    };
+    let job = testing::expect_ok(manager.add("work", Option::Some(10)), "job");
+    testing::assert(
+        testing::expect_ok(manager.flush(context::Context::background()), "initial draw"),
+    );
+    testing::assert_ok(job.set_position(0));
+    testing::assert_ok(job.set_total(10));
+    testing::assert(!testing::expect_ok(manager.flush(context::Context::background()), "unchanged"));
+    testing::assert_ok(job.advance(1));
+    testing::assert(testing::expect_ok(manager.flush(context::Context::background()), "changed"));
+}

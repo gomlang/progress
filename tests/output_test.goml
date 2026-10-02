@@ -241,3 +241,29 @@ fn competing_logs_remain_complete_and_spinner_ticks_advance_only_interactively()
     testing::assert_eq(text.split("first message").len(), 2);
     testing::assert_eq(text.split("second message").len(), 2);
 }
+
+#[test]
+fn unchanged_updates_do_not_redraw_or_discard_pending_changes() -> () {
+    let h = simple();
+    defer h.close();
+    let ctx = context::Context::background();
+    let job = testing::expect_ok(h.manager.add("copy", Option::Some(10)), "job");
+    testing::assert(testing::expect_ok(h.manager.flush(ctx), "initial draw"));
+    let _ = drain(h);
+    testing::assert_ok(job.advance(0));
+    testing::assert_ok(job.set_position(0));
+    testing::assert_ok(job.set_total(10));
+    testing::assert_ok(job.set_message(""));
+    h.time(100);
+    testing::assert(!testing::expect_ok(h.manager.tick(ctx), "no-op tick"));
+    testing::assert(!testing::expect_ok(h.manager.flush(ctx), "no-op flush"));
+    testing::assert_eq(drain(h), "");
+    testing::assert_ok(job.advance(1));
+    testing::assert_ok(job.advance(0));
+    testing::assert_ok(job.set_position(1));
+    testing::assert(testing::expect_ok(h.manager.flush(ctx), "retain dirty update"));
+    testing::assert(drain(h).contains("1/10"));
+    testing::assert_ok(job.reset(Option::Some(10)));
+    testing::assert(testing::expect_ok(h.manager.flush(ctx), "reset draw"));
+    testing::assert(drain(h).contains("0/10"));
+}
