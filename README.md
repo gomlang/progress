@@ -8,7 +8,7 @@ Concurrent progress bars, spinners and coordinated logging for GoML terminal app
 "ecosystem::terminal" = "0.1.0"
 ```
 
-```gom
+```goml
 use ecosystem::progress;
 use ecosystem::terminal;
 use std::context;
@@ -66,7 +66,7 @@ The test suite covers atomic and concurrent updates, frozen timing and reset, in
 
 ## Development and examples
 
-Requires GoML 0.1.55 or newer. The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
+Requires GoML 0.1.56 or newer. The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
 
 ```sh
 goml run --example basic
