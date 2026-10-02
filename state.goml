@@ -4,6 +4,7 @@ use std::io::{Error};
 use std::math;
 use std::num::{ToFloat, TryToInt};
 use std::io;
+use std::panic;
 
 struct Entry {
     id: i64,
@@ -28,16 +29,20 @@ struct State {
     failure: Option[Error],
 }
 
-fn read_time(state: State, clock: Clock) -> i64 {
+fn read_time(state: State, clock: Clock) -> Result[i64, Error] {
     let read = clock.read;
-    let now = read();
-    if now < state.now {
-        state.now
-    } else if now > MAX_POSITION {
-        MAX_POSITION
-    } else {
-        now
-    }
+    let now = panic::catch(read).map_err(
+        |_| failure(io::ErrorKind::Other, "clock callback panicked"),
+    )?;
+    Result::Ok(
+        if now < state.now {
+            state.now
+        } else if now > MAX_POSITION {
+            MAX_POSITION
+        } else {
+            now
+        },
+    )
 }
 
 fn find_entry(state: State, id: i64) -> Result[isize, Error] {

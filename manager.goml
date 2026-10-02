@@ -152,7 +152,13 @@ impl Manager {
             self.gate.send(state);
             return Result::Err(error)
         }
-        state.now = read_time(state, self.options.clock);
+        state.now = match read_time(state, self.options.clock) {
+            Ok(now) => now,
+            Err(error) => {
+                self.gate.send(state);
+                return Result::Err(error)
+            },
+        };
         Result::Ok(state)
     }
 
@@ -365,7 +371,13 @@ impl Manager {
             self.close_gate.send(Option::Some(Result::Err(closed())));
             return Result::Err(closed())
         };
-        state.now = read_time(state, self.options.clock);
+        let clock_error = match read_time(state, self.options.clock) {
+            Ok(now) => {
+                state.now = now;
+                Option::None
+            },
+            Err(error) => Option::Some(error),
+        };
         for index in 0..state.entries.len() {
             let entry = state.entries[index];
             if entry.status == Status::Running {
@@ -430,7 +442,10 @@ impl Manager {
         self.gate.send(state);
         let result = match state.failure {
             Some(error) => Result::Err(error),
-            None => result,
+            None => match clock_error {
+                Some(error) => Result::Err(error),
+                None => result,
+            },
         };
         self.close_gate.send(Option::Some(result));
         result
