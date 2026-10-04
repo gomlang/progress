@@ -46,7 +46,9 @@ Updates modify state only. Call `tick(context)` from the application's event loo
 
 Bar fill uses the exact integer proportion, rounded down to whole cells. A
 100-column bar at 29/100 therefore contains exactly 29 filled cells; an empty
-total fills the bar completely.
+total fills the bar completely. A displayed rate rounds to the nearest tenth,
+with halfway values rounded upward. Its integer part is retained separately so
+large rates keep their precision.
 
 One manager owns one live progress region. Route concurrent logs through that manager. The supplied terminal session serializes writes, but direct writes, other progress managers, prompts, or full-screen renderers cannot automatically preserve each other's layouts. To combine a TUI with progress, render snapshots inside the TUI and leave progress output undrawn. No input is consumed by this package.
 

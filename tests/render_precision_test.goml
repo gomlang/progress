@@ -3,6 +3,7 @@ package tests;
 use ecosystem::ansi;
 use ecosystem::progress;
 use std::testing;
+use std::num::{ToFloat};
 
 fn bar_snapshot(position: i64, total: i64) -> progress::JobSnapshot {
     progress::JobSnapshot {
@@ -55,6 +56,53 @@ fn bar_fill_at_maximum_position_and_width_stays_bounded() -> () {
         testing::assert_eq(
             line,
             "| job [" + "=".repeat(filled) + "-".repeat(512 - filled) + f"] {position}/{total}",
+        );
+    }
+}
+
+#[test]
+fn rate_rendering_preserves_decimal_tenths() -> () {
+    let style = progress::Style { bar_columns: 0, ..progress::Style::defaults() };
+    for tenths in 0..101 {
+        let snapshot = progress::JobSnapshot {
+            per_second: Option::Some(tenths.to_f64() / 10.0),
+            ..bar_snapshot(0, 100),
+        };
+        testing::assert_eq(
+            testing::expect_ok(
+                progress::render_job(snapshot, 100, style, ansi::Profile::Plain),
+                "rate",
+            ),
+            f"| job 0/100 {tenths / 10}.{tenths % 10}/s",
+        );
+    }
+}
+
+#[test]
+fn rate_rendering_rounds_with_carry_and_preserves_large_integer_parts() -> () {
+    let style = progress::Style { bar_columns: 0, ..progress::Style::defaults() };
+    for (rate, expected) in[
+        (0.0, "0.0"),
+        (0.125, "0.1"),
+        (1.25, "1.3"),
+        (1.99, "2.0"),
+        (4503599627370495.5, "4503599627370495.5"),
+        (9007199254740990.0, "9007199254740990.0"),
+        (progress::MAX_POSITION.to_f64(), ">=9007199254740991"),
+        (-1.0, "?"),
+        (float64_from_bits(0x7ff0000000000000), "?"),
+        (float64_from_bits(0x7ff8000000000000), "?"),
+    ] {
+        let snapshot = progress::JobSnapshot {
+            per_second: Option::Some(rate),
+            ..bar_snapshot(0, 100),
+        };
+        testing::assert_eq(
+            testing::expect_ok(
+                progress::render_job(snapshot, 100, style, ansi::Profile::Plain),
+                "rate",
+            ),
+            "| job 0/100 " + expected + "/s",
         );
     }
 }

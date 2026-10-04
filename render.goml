@@ -49,8 +49,8 @@ fn decimal_rate(value: f64) -> string {
         return ">=" + MAX_POSITION.to_string()
     }
     let whole = value.try_to_i64().unwrap_or(0);
-    let fraction = ((value - whole.to_f64()) * 10.0).try_to_i64().unwrap_or(0);
-    whole.to_string() + "." + fraction.to_string()
+    let fraction = math::round((value - whole.to_f64()) * 10.0).try_to_i64().unwrap_or(0);
+    (whole + fraction / 10).to_string() + "." + (fraction % 10).to_string()
 }
 
 pub fn render_job(job: JobSnapshot, columns: isize, style: Style, profile: ansi::Profile) -> Result[
