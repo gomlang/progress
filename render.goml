@@ -85,9 +85,8 @@ pub fn render_job(job: JobSnapshot, columns: isize, style: Style, profile: ansi:
             let filled = if total == 0 {
                 style.bar_columns
             } else {
-                math::floor(job.position.to_f64() / total.to_f64() * style.bar_columns.to_f64()).try_to_isize().unwrap_or(
-                    0,
-                )
+                // MAX_POSITION * the 512-column limit fits in i64.
+                (job.position * style.bar_columns.to_i64() / total).to_isize()
             };
             text += "[" + style.fill.repeat(filled) + style.empty.repeat(style.bar_columns - filled)
                 + "] ";

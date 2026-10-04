@@ -1,0 +1,60 @@
+package tests;
+
+use ecosystem::ansi;
+use ecosystem::progress;
+use std::testing;
+
+fn bar_snapshot(position: i64, total: i64) -> progress::JobSnapshot {
+    progress::JobSnapshot {
+        id: 1,
+        name: "job",
+        message: "",
+        position,
+        total: Option::Some(total),
+        status: progress::Status::Running,
+        elapsed_ms: 0,
+        per_second: Option::None,
+        eta_ms: Option::None,
+        frame: 0,
+    }
+}
+
+#[test]
+fn bar_fill_preserves_exact_integer_boundaries() -> () {
+    let style = progress::Style { bar_columns: 100, ..progress::Style::defaults() };
+    for position in 0..101 {
+        let line = testing::expect_ok(
+            progress::render_job(
+                bar_snapshot(position.to_i64(), 100),
+                4096,
+                style,
+                ansi::Profile::Plain,
+            ),
+            "render exact percentage",
+        );
+        testing::assert_eq(
+            line,
+            "| job [" + "=".repeat(position) + "-".repeat(100 - position) + f"] {position}/100",
+        );
+    }
+}
+
+#[test]
+fn bar_fill_at_maximum_position_and_width_stays_bounded() -> () {
+    let style = progress::Style { bar_columns: 512, ..progress::Style::defaults() };
+    for (position, total, filled) in[
+        (0, 0, 512),
+        (0, progress::MAX_POSITION, 0),
+        (progress::MAX_POSITION - 1, progress::MAX_POSITION, 511),
+        (progress::MAX_POSITION, progress::MAX_POSITION, 512),
+    ] {
+        let line = testing::expect_ok(
+            progress::render_job(bar_snapshot(position, total), 4096, style, ansi::Profile::Plain),
+            "render maximum bar",
+        );
+        testing::assert_eq(
+            line,
+            "| job [" + "=".repeat(filled) + "-".repeat(512 - filled) + f"] {position}/{total}",
+        );
+    }
+}
