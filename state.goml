@@ -1,8 +1,7 @@
 package progress;
 
 use std::io::{Error};
-use std::math;
-use std::num::{ToFloat, TryToInt};
+use std::num::{ToFloat};
 use std::io;
 use std::panic;
 
@@ -54,6 +53,37 @@ fn find_entry(state: State, id: i64) -> Result[isize, Error] {
     Result::Err(failure(io::ErrorKind::NotFound, "job was removed"))
 }
 
+fn remaining_ms(remaining: i64, elapsed: i64, position: i64) -> Option[i64] {
+    let mut bit = 1;
+    while bit <= elapsed / 2 {
+        bit *= 2;
+    }
+    let mut quotient = 0;
+    let mut remainder = 0;
+    while bit > 0 {
+        // Divide the growing product one bit at a time. The remainder stays
+        // below position; intermediates are at most 3 * MAX_POSITION.
+        remainder *= 2;
+        if elapsed & bit != 0 {
+            remainder += remaining;
+        }
+        quotient = quotient * 2 + remainder / position;
+        remainder %= position;
+        if quotient > MAX_POSITION {
+            return Option::None
+        }
+        bit /= 2;
+    }
+    if remainder != 0 {
+        quotient += 1;
+    }
+    if quotient > MAX_POSITION {
+        Option::None
+    } else {
+        Option::Some(quotient)
+    }
+}
+
 fn entry_snapshot(entry: Entry, now: i64, spinner_ms: i64) -> JobSnapshot {
     let elapsed = entry.ended.unwrap_or(now) - entry.started;
     let rate = if elapsed > 0 && entry.position > 0 {
@@ -62,14 +92,11 @@ fn entry_snapshot(entry: Entry, now: i64, spinner_ms: i64) -> JobSnapshot {
         Option::None
     };
     let eta = match (entry.total, rate) {
-        (Some(total), Some(rate)) if entry.status == Status::Running => {
-            let value = math::ceil((total - entry.position).to_f64() * 1000.0 / rate);
-            if value <= MAX_POSITION.to_f64() {
-                Option::Some(value.try_to_i64().unwrap_or(0))
-            } else {
-                Option::None
-            }
-        },
+        (Some(total), Some(_)) if entry.status == Status::Running => remaining_ms(
+            total - entry.position,
+            elapsed,
+            entry.position,
+        ),
         _ => Option::None,
     };
     JobSnapshot {

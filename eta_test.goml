@@ -1,0 +1,23 @@
+package progress;
+
+use std::testing;
+
+#[test]
+fn remaining_time_matches_integer_arithmetic_and_scaled_ratios() -> () {
+    let mut seed: i64 = 17;
+    for _ in 0..1000 {
+        seed = seed * 48271 % 2147483647;
+        let position = seed % 4095 + 1;
+        seed = seed * 48271 % 2147483647;
+        let remaining = seed % 4096;
+        seed = seed * 48271 % 2147483647;
+        let elapsed = seed % 1000000 + 1;
+        let expected = (remaining * elapsed + position - 1) / position;
+        testing::assert_eq(remaining_ms(remaining, elapsed, position).unwrap_or(-1), expected);
+        let scale: i64 = 1099511627776;
+        testing::assert_eq(
+            remaining_ms(remaining * scale, elapsed, position * scale).unwrap_or(-1),
+            expected,
+        );
+    }
+}

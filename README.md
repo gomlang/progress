@@ -44,6 +44,10 @@ Updates modify state only. Call `tick(context)` from the application's event loo
 
 `log(context, message)` erases the currently drawn block, writes the log, and redraws under one output lock. Interactive log text wraps at the drawable width; an indivisible grapheme wider than that width is clipped. Lines mode writes the complete message. Names, messages and logs must be single-line text without C0/C1 or Unicode line/paragraph controls, preventing cursor-control injection. They are never parsed as ANSI.
 
+ETA rounds the exact ratio `remaining * elapsed_ms / position` up to whole
+milliseconds. The calculation avoids overflowing intermediate products or
+reusing the rounded floating-point rate; estimates above `MAX_POSITION` are absent.
+
 Bar fill uses the exact integer proportion, rounded down to whole cells. A
 100-column bar at 29/100 therefore contains exactly 29 filled cells; an empty
 total fills the bar completely. A displayed rate rounds to the nearest tenth,

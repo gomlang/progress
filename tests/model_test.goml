@@ -128,6 +128,36 @@ fn rate_eta_clock_regression_and_reset_have_defined_semantics() -> () {
 }
 
 #[test]
+fn eta_uses_exact_integer_ratios_without_rounding_or_product_overflow() -> () {
+    let max = progress::MAX_POSITION;
+    for (position, remaining, elapsed, expected) in Vec::from_array(
+        [
+            (3, 3, 999, Option::Some(999)),
+            (2, 1, 1, Option::Some(1)),
+            (3, 1, 4, Option::Some(2)),
+            (max - 1, 1, max, Option::Some(2)),
+            (max - 1, 1, max - 1, Option::Some(1)),
+            (max / 2, max / 2, max, Option::Some(max)),
+            (max / 2 + 1, max / 2, max, Option::Some(max - 1)),
+            (max / 2, max / 2 + 1, max, Option::None),
+            (1, max - 1, max, Option::None),
+            (max, 0, max, Option::Some(0)),
+        ],
+    ) {
+        let h = simple();
+        defer h.close();
+        let job = testing::expect_ok(
+            h.manager.add("eta", Option::Some(position + remaining)),
+            "job",
+        );
+        h.time(elapsed);
+        testing::assert_ok(job.set_position(position));
+        let actual = h.snapshot().jobs[0].eta_ms;
+        testing::assert_eq(actual.unwrap_or(-1), expected.unwrap_or(-1));
+    }
+}
+
+#[test]
 fn bounded_storage_removed_handles_and_detached_snapshots() -> () {
     let h = harness(
         progress::Options { max_jobs: 2, max_message_bytes: 8, ..progress::Options::defaults() },
