@@ -24,6 +24,7 @@ struct State {
     last_draw: Option[i64],
     dirty: bool,
     rows: isize,
+    inline_frame: bool,
     width: Option[isize],
     failure: Option[Error],
 }

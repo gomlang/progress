@@ -36,15 +36,20 @@ fn context_check(ctx: context::Context) -> Result[(), Error] {
     )
 }
 
-fn erase(rows: isize) -> string {
+fn erase(rows: isize, inline_frame: bool) -> string {
     if rows == 0 {
         ""
+    } else if inline_frame {
+        "\r\u001b[2K"
     } else {
         "\r" + "\u001b[1A\u001b[2K".repeat(rows)
     }
 }
 
-fn frame_text(lines: Vec[string]) -> string {
+fn frame_text(lines: Vec[string], inline_frame: bool) -> string {
+    if inline_frame {
+        return lines.join("\r\n")
+    }
     let mut output = "";
     for line in lines {
         output += line + "\r\n";
@@ -105,6 +110,7 @@ impl Manager {
                 last_draw: Option::None,
                 dirty: false,
                 rows: 0,
+                inline_frame: false,
                 width: Option::None,
                 failure: Option::None,
             },
@@ -219,11 +225,13 @@ impl Manager {
         Result::Ok(())
     }
 
-    fn dimensions(self: Manager, state: State) -> (isize, isize) {
+    fn dimensions(self: Manager, state: State) -> (isize, isize, bool) {
         let mut width = state.width.unwrap_or(self.options.width);
         let mut rows = self.options.max_visible;
+        let mut single_row = false;
         if self.interactive && self.options.follow_terminal_size {
             if let Ok(size) = self.session.size() {
+                single_row = size.rows == 1;
                 if state.width.is_none() && size.columns > 0 {
                     width = if size.columns > 4096 {
                         4096
@@ -244,7 +252,7 @@ impl Manager {
         } else {
             width
         };
-        (columns, rows)
+        (columns, rows, single_row)
     }
 
     fn write(self: Manager, ctx: context::Context, text: string) -> Result[(), Error] {
@@ -308,12 +316,12 @@ impl Manager {
         if !force && !state.dirty && !(self.interactive && running) {
             return Result::Ok(false)
         }
-        let (width, rows) = self.dimensions(state);
+        let (width, rows, inline_frame) = self.dimensions(state);
         let snapshot = state_snapshot(state, self.options.spinner_ms, false);
         let mut text = "";
         let mut drawn_rows = 0;
         if self.interactive {
-            text = erase(state.rows);
+            text = erase(state.rows, state.inline_frame);
             if let Some(message) = log {
                 for line in unicode_text::wrap(
                     message,
@@ -327,7 +335,7 @@ impl Manager {
                 }
             }
             let lines = render(snapshot, width, rows, self.options.style, self.profile)?;
-            text += frame_text(lines);
+            text += frame_text(lines, inline_frame);
             drawn_rows = lines.len();
         } else {
             if let Some(message) = log {
@@ -356,6 +364,7 @@ impl Manager {
         }
         state.dirty = false;
         state.rows = drawn_rows;
+        state.inline_frame = inline_frame;
         state.last_draw = Option::Some(state.now);
         Result::Ok(text != "")
     }
@@ -389,16 +398,16 @@ impl Manager {
                 };
             }
         }
-        let (width, rows) = self.dimensions(state);
+        let (width, rows, _) = self.dimensions(state);
         let snapshot = state_snapshot(state, self.options.spinner_ms, true);
         let mut text = if self.interactive {
-            erase(state.rows)
+            erase(state.rows, state.inline_frame)
         } else {
             ""
         };
         let rendered = if self.interactive {
             render(snapshot, width, rows, self.options.style, self.profile).map(
-                |lines| frame_text(lines),
+                |lines| frame_text(lines, false),
             )
         } else {
             let lines = Vec::new();
@@ -439,6 +448,7 @@ impl Manager {
             Err(error) => Result::Err(error),
         };
         state.rows = 0;
+        state.inline_frame = false;
         self.gate.send(state);
         let result = match state.failure {
             Some(error) => Result::Err(error),

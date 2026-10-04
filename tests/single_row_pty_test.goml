@@ -1,0 +1,129 @@
+package tests;
+
+use ecosystem::progress;
+use ecosystem::terminal;
+use std::bytes::endian;
+use std::context;
+use std::io;
+use std::os::linux::fd;
+use std::testing;
+use std::utf8;
+
+fn pty_output(master: fd::Fd) -> string {
+    let bytes = Vec::new();
+    let buffer = Vec::new();
+    for _ in 0..4096 {
+        buffer.push(0);
+    }
+    loop {
+        match master.read(buffer.as_mut_slice()) {
+            Ok(0) => break,
+            Ok(count) => for index in 0..count {
+                bytes.push(buffer[index]);
+            },
+            Err(error) => {
+                testing::assert_eq(error.kind(), io::ErrorKind::WouldBlock);
+                break
+            },
+        }
+    }
+    testing::expect_ok(utf8::decode(bytes), "PTY output")
+}
+
+#[test]
+fn one_row_terminal_retains_live_progress_across_logs_and_resize() -> () {
+    let master = testing::expect_ok(
+        fd::open("/dev/ptmx", fd::O_RDWR | fd::O_NOCTTY | fd::O_NONBLOCK, 0),
+        "PTY master",
+    );
+    defer {
+        let _ = master.close();
+    };
+    let data = Vec::from_array([0, 0, 0, 0]);
+    testing::assert_ok(master.ioctl(0x40045431, data.as_mut_slice()));
+    testing::assert_ok(master.ioctl(0x80045430, data.as_mut_slice()));
+    let number = testing::expect_ok(
+        endian::read_u32(data.as_slice(), 0, endian::Endian::Little),
+        "PTY number",
+    );
+    let slave = testing::expect_ok(
+        fd::open("/dev/pts/" + number.to_string(), fd::O_RDWR | fd::O_NOCTTY, 0),
+        "PTY slave",
+    );
+    defer {
+        let _ = slave.close();
+    };
+    let size = Vec::from_array([1, 0, 40, 0, 0, 0, 0, 0]);
+    testing::assert_ok(slave.ioctl(0x5414, size.as_mut_slice()));
+    let session = testing::expect_ok(
+        terminal::Session::from_fds(
+            slave,
+            slave,
+            terminal::Options { raw_mode: true, ..terminal::Options::defaults() },
+        ),
+        "raw session",
+    );
+    defer {
+        let _ = session.close();
+    };
+    let manager = testing::expect_ok(
+        progress::Manager::new(
+            session,
+            progress::Options {
+                mode: progress::Mode::Interactive,
+                clock: progress::Clock::new(|| 0),
+                refresh_ms: 0,
+                style: progress::Style {
+                    bar_columns: 0,
+                    show_rate: false,
+                    show_eta: false,
+                    ..progress::Style::defaults(),
+                },
+                ..progress::Options::defaults(),
+            },
+        ),
+        "manager",
+    );
+    defer {
+        let _ = manager.shutdown();
+    };
+    let ctx = context::Context::background();
+    let job = testing::expect_ok(manager.add("one", Option::Some(10)), "job");
+    testing::assert_ok(manager.flush(ctx));
+    let initial = pty_output(master);
+    testing::assert(initial.contains("one 0/10"));
+    testing::assert_eq(initial.contains("\n"), false);
+    testing::assert_ok(job.advance(1));
+    testing::assert_ok(manager.flush(ctx));
+    let updated = pty_output(master);
+    testing::assert(updated.starts_with("\r\u001b[2K"));
+    testing::assert(updated.contains("one 1/10"));
+    testing::assert(!updated.contains("\n"));
+    testing::assert_ok(manager.log(ctx, "notice"));
+    let logged = pty_output(master);
+    testing::assert(logged.contains("notice\r\n"));
+    testing::assert(logged.contains("one 1/10"));
+    testing::assert(!logged.ends_with("\n"));
+    size[0] = 3;
+    testing::assert_ok(slave.ioctl(0x5414, size.as_mut_slice()));
+    testing::assert_ok(manager.flush(ctx));
+    let taller = pty_output(master);
+    testing::assert(taller.starts_with("\r\u001b[2K"));
+    testing::assert(taller.ends_with("\r\n"));
+    size[0] = 1;
+    testing::assert_ok(slave.ioctl(0x5414, size.as_mut_slice()));
+    testing::assert_ok(manager.flush(ctx));
+    let shorter = pty_output(master);
+    testing::assert(shorter.starts_with("\r\u001b[1A\u001b[2K"));
+    testing::assert(!shorter.ends_with("\n"));
+    testing::assert_ok(job.remove(ctx));
+    testing::assert_ok(manager.flush(ctx));
+    testing::assert_eq(pty_output(master), "\r\u001b[2K");
+    let _ = testing::expect_ok(manager.add("last", Option::None), "last job");
+    testing::assert_ok(manager.flush(ctx));
+    testing::assert(!pty_output(master).ends_with("\n"));
+    testing::assert_ok(manager.shutdown());
+    let closed = pty_output(master);
+    testing::assert(closed.contains("x last"));
+    testing::assert(closed.ends_with("\r\n"));
+}

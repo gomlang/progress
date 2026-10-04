@@ -44,6 +44,11 @@ Updates modify state only. Call `tick(context)` from the application's event loo
 
 `log(context, message)` erases the currently drawn block, writes the log, and redraws under one output lock. Interactive log text wraps at the drawable width; an indivisible grapheme wider than that width is clipped. Lines mode writes the complete message. Names, messages and logs must be single-line text without C0/C1 or Unicode line/paragraph controls, preventing cursor-control injection. They are never parsed as ANSI.
 
+When automatic sizing detects a one-row terminal, live progress stays on the
+current row without a trailing newline. Refreshes erase that row directly;
+logs and shutdown still emit line endings. Resizing preserves the previous
+frame's cursor position when choosing which rows to erase.
+
 ETA rounds the exact ratio `remaining * elapsed_ms / position` up to whole
 milliseconds. The calculation avoids overflowing intermediate products or
 reusing the rounded floating-point rate; estimates above `MAX_POSITION` are absent.
