@@ -267,3 +267,57 @@ fn unchanged_updates_do_not_redraw_or_discard_pending_changes() -> () {
     testing::assert(testing::expect_ok(h.manager.flush(ctx), "reset draw"));
     testing::assert(drain(h).contains("0/10"));
 }
+
+#[test]
+fn batched_lines_preserve_empty_logs_and_dirty_job_order() -> () {
+    let h = simple();
+    defer h.close();
+    let ctx = context::Context::background();
+    testing::assert(!testing::expect_ok(h.manager.flush(ctx), "empty flush"));
+    testing::assert_eq(drain(h), "");
+    testing::assert_ok(h.manager.log(ctx, ""));
+    testing::assert_eq(drain(h), "\n");
+    let one = testing::expect_ok(h.manager.add("one", Option::None), "one");
+    let _ = testing::expect_ok(h.manager.add("two", Option::None), "two");
+    let three = testing::expect_ok(h.manager.add("界e\u0301🙂", Option::None), "three");
+    testing::assert_ok(h.manager.flush(ctx));
+    testing::assert_eq(drain(h), "| one 0\n| two 0\n| 界e\u0301🙂 0\n");
+    testing::assert_ok(three.advance(2));
+    testing::assert_ok(one.advance(1));
+    testing::assert_ok(h.manager.log(ctx, ""));
+    testing::assert_eq(drain(h), "\n| one 1\n| 界e\u0301🙂 2\n");
+    let jobs = h.snapshot().jobs;
+    testing::assert_eq(jobs[0].position, 1);
+    testing::assert_eq(jobs[1].position, 0);
+    testing::assert_eq(jobs[2].position, 2);
+    testing::assert(!testing::expect_ok(h.manager.flush(ctx), "clean flush"));
+    testing::assert_eq(drain(h), "");
+    testing::assert_ok(h.manager.shutdown());
+    testing::assert_eq(drain(h), "x one 1\nx two 0\nx 界e\u0301🙂 2\n");
+    testing::assert_ok(h.manager.shutdown());
+    testing::assert_eq(drain(h), "");
+}
+
+#[test]
+fn wrapped_and_empty_logs_precede_the_complete_interactive_frame() -> () {
+    let h = harness(
+        progress::Options {
+            mode: progress::Mode::Interactive,
+            width: 9,
+            follow_terminal_size: false,
+            ..progress::Options::defaults(),
+        },
+    );
+    defer h.close();
+    let ctx = context::Context::background();
+    let _ = testing::expect_ok(h.manager.add("one", Option::None), "one");
+    let _ = testing::expect_ok(h.manager.add("two", Option::None), "two");
+    let frame = "| one 0\r\n| two 0\r\n";
+    let erase = "\r\u001b[1A\u001b[2K\u001b[1A\u001b[2K";
+    testing::assert_ok(h.manager.flush(ctx));
+    testing::assert_eq(drain(h), frame);
+    testing::assert_ok(h.manager.log(ctx, ""));
+    testing::assert_eq(drain(h), erase + "\r\n" + frame);
+    testing::assert_ok(h.manager.log(ctx, "a".repeat(19)));
+    testing::assert_eq(drain(h), erase + "aaaaaaaa\r\naaaaaaaa\r\naaa\r\n" + frame);
+}

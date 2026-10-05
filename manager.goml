@@ -46,15 +46,22 @@ fn erase(rows: isize, inline_frame: bool) -> string {
     }
 }
 
+fn terminated_lines(lines: Vec[string], ending: string) -> string {
+    if lines.is_empty() {
+        ""
+    } else if lines.len() == 1 {
+        lines[0] + ending
+    } else {
+        lines.join(ending) + ending
+    }
+}
+
 fn frame_text(lines: Vec[string], inline_frame: bool) -> string {
     if inline_frame {
-        return lines.join("\r\n")
+        lines.join("\r\n")
+    } else {
+        terminated_lines(lines, "\r\n")
     }
-    let mut output = "";
-    for line in lines {
-        output += line + "\r\n";
-    }
-    output
 }
 
 impl Manager {
@@ -323,6 +330,7 @@ impl Manager {
         if self.interactive {
             text = erase(state.rows, state.inline_frame);
             if let Some(message) = log {
+                let log_lines = Vec::new();
                 for line in unicode_text::wrap(
                     message,
                     if width < 1 {
@@ -331,27 +339,31 @@ impl Manager {
                         width
                     },
                 ) {
-                    text += unicode_text::truncate(line, width) + "\r\n";
+                    log_lines.push(unicode_text::truncate(line, width));
                 }
+                text += terminated_lines(log_lines, "\r\n");
             }
             let lines = render(snapshot, width, rows, self.options.style, self.profile)?;
             text += frame_text(lines, inline_frame);
             drawn_rows = lines.len();
         } else {
+            let lines = Vec::new();
             if let Some(message) = log {
-                text += message + "\n";
+                lines.push(message);
             }
             for index in 0..state.entries.len() {
                 if state.entries[index].dirty {
-                    text += render_job(
-                        snapshot.jobs[index],
-                        width,
-                        self.options.style,
-                        ansi::Profile::Plain,
-                    )?
-                        + "\n";
+                    lines.push(
+                        render_job(
+                            snapshot.jobs[index],
+                            width,
+                            self.options.style,
+                            ansi::Profile::Plain,
+                        )?,
+                    );
                 }
             }
+            text = terminated_lines(lines, "\n");
         }
         if text != "" {
             if let Err(error) = self.write(ctx, text) {
@@ -423,14 +435,7 @@ impl Manager {
                     );
                 }
             }
-            Result::Ok(
-                lines.join("\n")
-                    + if lines.is_empty() {
-                        ""
-                    } else {
-                        "\n"
-                    },
-            )
+            Result::Ok(terminated_lines(lines, "\n"))
         };
         let result = match rendered {
             Ok(value) => {

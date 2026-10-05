@@ -42,6 +42,10 @@ Updates modify state only. Call `tick(context)` from the application's event loo
 
 `Mode::Auto` uses the supplied session's interactive capability. `Lines` always emits plain, newline-delimited progress; `Interactive` enables cursor control explicitly. Automatic output queries terminal size on each draw, reserves the final column to avoid autowrap, limits rows to the screen, and summarizes hidden jobs. `set_width(Some(columns))` overrides width; `None` restores the configured fallback or terminal width. `Style` customizes single-column spinner frames, bar cells/width, elapsed/rate/ETA fields, and four ANSI status styles. Color respects session capabilities and the requested ANSI profile. `render_job` and `render` are pure, bounded, grapheme-aware renderers usable in memory and application-owned displays.
 
+Multi-line output is assembled from complete rendered lines before the session write,
+avoiding repeated copies of earlier lines. Collecting these lines adds small bookkeeping
+allocations to short batches; rendering and terminal writes retain their existing limits.
+
 `log(context, message)` erases the currently drawn block, writes the log, and redraws under one output lock. Interactive log text wraps at the drawable width; an indivisible grapheme wider than that width is clipped. Lines mode writes the complete message. Names, messages and logs must be single-line text without C0/C1 or Unicode line/paragraph controls, preventing cursor-control injection. They are never parsed as ANSI.
 
 When automatic sizing detects a one-row terminal, live progress stays on the
