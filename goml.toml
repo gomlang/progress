@@ -5,6 +5,3 @@ path = "ecosystem::progress"
 "ecosystem::ansi" = true
 "ecosystem::terminal" = true
 "ecosystem::unicode_text" = true
-
-[dev-dependencies]
-"ecosystem::verification" = true

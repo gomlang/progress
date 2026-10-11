@@ -80,18 +80,18 @@ Defaults: 128 retained jobs, 4 KiB per name/message/log, 20 visible rows, 80 fal
 From the repository root:
 
 ```sh
-(cd ../verification && GOML_BUILD_JOBS=2 just ecosystem-test progress)
+(cd ../workflows && GOML_BUILD_JOBS=2 just ecosystem-test progress)
 ```
 
 The test suite covers atomic and concurrent updates, frozen timing and reset, invalid-input rollback, capacity and stale handles, detached snapshots, Unicode/style rendering, deterministic throttling, plain logs, interactive redraw/resize, shared-session input ownership, cancellation before work, queued deadlines, output pressure, sticky errors, shutdown wakeups, and session reuse. The example exercises the public API, and the ecosystem verification runner checks the downstream dependency boundary. The reference oracle checks 400 rate/ETA/spinner/bar cases using independently calculated integer/fraction arithmetic in a GoML example test; PTY tests use a real shared terminal session and verify restored termios/flags/cursor modes.
 
 ## Development and examples
 
-Requires the source-built GoML toolchain with unversioned registry support pinned in [verification/ci/toolchain.json](https://github.com/gomlang/verification/blob/main/ci/toolchain.json). The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
+Requires the source-built GoML toolchain with unversioned registry support pinned in [workflows/ci/toolchain.json](https://github.com/gomlang/workflows/blob/main/ci/toolchain.json). The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
 
 ```sh
 goml run --example basic
 goml test
 ```
 
-`goml test` builds the example and runs its tests. `(cd ../verification && just ecosystem-test progress)` also retains the library-specific smoke and compatibility checks.
+`goml test` builds the example and runs its tests. `(cd ../workflows && just ecosystem-test progress)` also retains the library-specific smoke and compatibility checks.
